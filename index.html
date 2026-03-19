@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>TIME TRIAL 🏎️</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <!-- Module GTLF/GLB pour charger les modèles ultra réalistes -->
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            font-family: 'Arial', sans-serif;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        #distance {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ff88;
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 0 15px #00ff88;
+            letter-spacing: 2px;
+            z-index: 10;
+        }
+
+        #timer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #ffff00;
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 0 15px #ffff00;
+            z-index: 10;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border: 4px solid #ff006e;
+            border-radius: 20px;
+            box-shadow: 0 0 40px #ff006e;
+            z-index: 20;
+            display: none;
+        }
+
+        #countdownDisplay {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 150px;
+            font-weight: bold;
+            color: #ffae00;
+            text-shadow: 0 0 30px #ff006e, 0 0 10px #ffffff;
+            z-index: 15;
+            transition: transform 0.1s, opacity 0.5s;
+        }
+
+        #gameOver h1 {
+            font-size: 48px;
+            margin: 0 0 20px 0;
+            text-shadow: 0 0 20px #00ff88;
+        }
+
+        #gameOver p {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+
+        #gameOver button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        #gameOver button:hover {
+            background: #ff006e;
+            transform: scale(1.1);
+        }
+
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ffff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ffff;
+            z-index: 10;
+        }
+
+        #finishWarning {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff006e;
+            font-size: 36px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #ff006e;
+            z-index: 10;
+            display: none;
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            0% {
+                opacity: 1;
+                text-shadow: 0 0 20px #ff006e;
+            }
+
+            50% {
+                opacity: 0.5;
+                text-shadow: 0 0 10px #ff006e;
+            }
+
+            100% {
+                opacity: 1;
+                text-shadow: 0 0 20px #ff006e;
+            }
+        }
+
+        #boostContainer {
+            position: absolute;
+            bottom: 60px;
+            left: 20px;
+            width: 300px;
+            z-index: 10;
+        }
+
+        #boostLabel {
+            color: #00ffff;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px #00ffff;
+            transition: all 0.2s;
+        }
+
+        #boostBarBg {
+            width: 100%;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 10px #00ffff;
+        }
+
+        #boostBar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #ffae00, #ff006e);
+            box-shadow: 0 0 20px #ff006e;
+            transition: width 0.1s linear;
+            /* Animation fluide */
+        }
+
+        .boostTextActive {
+            color: #ff006e !important;
+            text-shadow: 0 0 20px #ff006e !important;
+            animation: blink 0.2s infinite;
+        }
+
+        #minimap {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 150px;
+            height: 300px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            box-shadow: 0 0 15px #00ffff;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="distance">DISTANCE: 0M / 5000M</div>
+    <div id="timer">TIME: 60</div>
+    <div id="speedometer">SPEED: 0 KM/H</div>
+    <div id="boostContainer">
+        <div id="boostLabel">BOOST (Maintiens ESPACE)</div>
+        <div id="boostBarBg">
+            <div id="boostBar"></div>
+        </div>
+    </div>
+    <div id="finishWarning">FINISH LINE AHEAD!</div>
+    <div id="countdownDisplay">3</div>
+    <canvas id="minimap" width="150" height="300"></canvas>
+    <div id="gameOver">
+        <h1 id="gameResult">GAME OVER!</h1>
+        <p id="finalInfo">...</p>
+        <button onclick="location.reload()">RETRY</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+        const scene = new BABYLON.Scene(engine);
+        // Ambiance de jour (Ciel très clair façon ciel d'été)
+        scene.clearColor = new BABYLON.Color4(0.5, 0.8, 0.95, 1); // Ciel bleu clair
+        scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+        scene.fogDensity = 0.002; // Un peu plus dense pour cacher la génération au loin
+        scene.fogColor = new BABYLON.Color3(0.5, 0.8, 0.95);
+
+        // ========== LUMIÈRE ==========
+        // Soleil directionnel pour bien éclairer la ville et l'eau
+        const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-1, -2, -1), scene);
+        sun.intensity = 1.0;
+        sun.diffuse = new BABYLON.Color3(1, 0.95, 0.9);
+
+        const light = new BABYLON.PointLight("light", new BABYLON.Vector3(0, 20, 0), scene);
+        light.intensity = 0.4;
+        light.diffuse = new BABYLON.Color3(1, 1, 1);
+
+        const ambientLight = new BABYLON.HemisphericLight("ambientLight", new BABYLON.Vector3(0, 1, 0), scene);
+        ambientLight.intensity = 0.6;
+
+        // Caméra qui suit la voiture
+        const camera = new BABYLON.FollowCamera("camera", new BABYLON.Vector3(0, 15, -25), scene);
+        camera.radius = 20;
+        camera.heightOffset = 10;
+        camera.rotationOffset = 180;
+        camera.cameraAcceleration = 0.05;
+        camera.maxCameraSpeed = 20;
+
+        // ========== VARIABLES PHYSIQUE ==========
+        let carVelocityY = 0;
+        const gravity = 0.04;
+        const groundY = 0.75;
+
+        // ========== VARIABLES DU JEU ==========
+        let gameActive = true;
+        let isRacing = false; // Bloque les entrées avant le GO!
+        let countdownValue = 3;
+        let timeLeft = 60; // 60 secondes pour faire 5000m
+        let speed = 0;
+        const FINISH_LINE_Z = 5000;
+
+        let boostEnergy = 0; // 0 à 100%
+        let boostActive = false;
+
+        // Animation du compte à rebours 3, 2, 1, GO!
+        const countdownEl = document.getElementById("countdownDisplay");
+        let countdownInterval = setInterval(() => {
+            countdownValue--;
+            if (countdownValue > 0) {
+                countdownEl.textContent = countdownValue;
+                countdownEl.style.transform = "translate(-50%, -50%) scale(1.3)";
+                setTimeout(() => countdownEl.style.transform = "translate(-50%, -50%) scale(1)", 150);
+            } else if (countdownValue === 0) {
+                countdownEl.textContent = "GO!";
+                countdownEl.style.color = "#00ff00";
+                countdownEl.style.textShadow = "0 0 50px #00ff00, 0 0 10px #ffffff";
+                countdownEl.style.transform = "translate(-50%, -50%) scale(1.5)";
+                isRacing = true; // DÉMARRAGE !
+            } else {
+                countdownEl.style.opacity = "0"; // Disparait 1 sec après le GO
+                clearInterval(countdownInterval);
+            }
+        }, 1000);
+
+        // ========== VOITURE DU JOUEUR (M4 NOIR MAT) ==========
+        const car = BABYLON.MeshBuilder.CreateBox("car", { width: 3, height: 1.5, depth: 4.5 }, scene);
+        car.position = new BABYLON.Vector3(0, 0.75, 0);
+        car.isVisible = false; // Boite de collision rendue invisible
+
+        // Chargement du Modèle 3D Ultra Réaliste de la BMW M4 (téléchargé localement)
+        BABYLON.SceneLoader.ImportMeshAsync("", "./", "bmw_m4.glb", scene).then((result) => {
+            console.log("M4 Hyper-Réaliste chargée correctement !");
+            const realCarMesh = result.meshes[0];
+            realCarMesh.parent = car;
+
+            realCarMesh.scaling = new BABYLON.Vector3(0.55, 0.55, 0.55);
+            realCarMesh.rotationQuaternion = null; // Important pour forcer l'usage de .rotation
+            realCarMesh.rotation.y = 0; // On l'inverse de 180° par rapport à l'étape d'avant
+            realCarMesh.position.y = -0.75;
+
+            // Forcer le rendu Noir Mat pour le joueur (Mode furtif !)
+            result.meshes.forEach(mesh => {
+                if (mesh.material) {
+                    mesh.material.albedoColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+                    mesh.material.metallic = 0.6;
+                    mesh.material.roughness = 0.6;
+                }
+            });
+        }).catch(err => console.error("Erreur de chargement du modèle 3D !", err));
+
+        camera.lockedTarget = car;
+
+        // ========== BOTS ==========
+        const bots = [];
+        const botData = [
+            { x: -15, z: 20, maxSpeed: 2.3, color: new BABYLON.Color3(1, 0.5, 0) }, // Orange
+            { x: 15, z: -10, maxSpeed: 2.45, color: new BABYLON.Color3(1, 0, 1) },  // Violet
+            { x: -25, z: 0, maxSpeed: 2.15, color: new BABYLON.Color3(0, 1, 0) }     // Vert
+        ];
+
+        botData.forEach((data, index) => {
+            const botMesh = BABYLON.MeshBuilder.CreateBox("bot" + index, { width: 3, height: 1.5, depth: 4.5 }, scene);
+            botMesh.position = new BABYLON.Vector3(data.x, 0.75, data.z);
+            botMesh.isVisible = false;
+
+            // Chargement du même modèle hyper réaliste pour les concurrents avec peintures vives
+            BABYLON.SceneLoader.ImportMeshAsync("", "./", "bmw_m4.glb", scene).then((result) => {
+                const realCarMesh = result.meshes[0];
+                realCarMesh.parent = botMesh;
+                realCarMesh.scaling = new BABYLON.Vector3(0.55, 0.55, 0.55);
+                realCarMesh.rotationQuaternion = null;
+                realCarMesh.rotation.y = 0;
+                realCarMesh.position.y = -0.75;
+
+                result.meshes.forEach(mesh => {
+                    if (mesh.material) {
+                        mesh.material.albedoColor = data.color;
+                        mesh.material.metallic = 0.9;
+                        mesh.material.roughness = 0.1;
+                    }
+                });
+            });
+
+            bots.push({ mesh: botMesh, maxSpeed: data.maxSpeed, currentSpeed: 0, colorBase: data.color });
+        });
+
+        // Contrôles
+        let carAngle = 0;
+        let carVelocity = 0;
+        let isDriftMode = false; // Etat ON/OFF du mode drift
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+
+            // Toggle (activer/désactiver) avec F
+            if (e.key.toLowerCase() === 'f') {
+                isDriftMode = !isDriftMode;
+            }
+            // L'espace (Boost) annule le mode drift pour reprendre de l'adhérence
+            if (e.key === ' ') {
+                isDriftMode = false;
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // ========== CIRCUIT SINUEUX ==========
+        const trackLength = FINISH_LINE_Z + 500;
+        const trackWidth = 60;
+
+        function getTrackX(z) {
+            if (z < 100) return 0; // Départ droit
+            let factor = (z - 100) / 200; // Transition douce
+            if (factor > 1) factor = 1;
+            return factor * (Math.sin(z / 400) * 150 + Math.sin(z / 200) * 80);
+        }
+
+        function getTrackY(z) {
+            if (z < 300) return 0; // Départ plat
+            let factor = (z - 300) / 300;
+            if (factor > 1) factor = 1;
+            // Grandes pentes et vallées (oscillations sur l'axe Y)
+            return factor * (Math.sin(z / 500) * 60 + Math.cos(z / 250) * 20);
+        }
+
+        // Les rubans de la route (Asphalte, Trottoirs, Plage, Océan et Plaine Droite)
+        const roadPath1 = []; const roadPath2 = [];
+        const tLeft1 = []; const tLeft2 = [];
+        const tRight1 = []; const tRight2 = [];
+        const beach1 = []; const beach2 = [];
+        const ocean1 = []; const ocean2 = [];
+        const grass1 = []; const grass2 = []; // Nouveau fond côté droit !
+
+        for (let z = -200; z < trackLength; z += 10) {
+            const x = getTrackX(z);
+            const y = getTrackY(z);
+
+            // Route
+            roadPath1.push(new BABYLON.Vector3(x - 30, y, z));
+            roadPath2.push(new BABYLON.Vector3(x + 30, y, z));
+
+            // Trottoir Gauche
+            tLeft1.push(new BABYLON.Vector3(x - 36, y + 0.3, z));
+            tLeft2.push(new BABYLON.Vector3(x - 30, y + 0.3, z));
+
+            // Trottoir Droit
+            tRight1.push(new BABYLON.Vector3(x + 30, y + 0.3, z));
+            tRight2.push(new BABYLON.Vector3(x + 36, y + 0.3, z));
+
+            // Plage (Gauche du trottoir vers la mer)
+            beach1.push(new BABYLON.Vector3(x - 80, y - 3, z));
+            beach2.push(new BABYLON.Vector3(x - 36, y + 0.3, z));
+
+            // Océan infini à gauche
+            ocean1.push(new BABYLON.Vector3(x - 2000, -10, z)); // Lhorizon lointain gauche
+            ocean2.push(new BABYLON.Vector3(x - 80, y - 3, z));
+
+            // Plaine herbeuse (Fond droit pour les immeubles !)
+            grass1.push(new BABYLON.Vector3(x + 36, y + 0.2, z));
+            grass2.push(new BABYLON.Vector3(x + 2000, y + 0.2, z)); // Lhorizon lointain droit
+        }
+
+        // --- MATÉRIAUX URBAINS ---
+        const asphalte = new BABYLON.StandardMaterial("asphalte", scene);
+        asphalte.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.15); // Gris foncé
+        asphalte.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+
+        const trottoirMat = new BABYLON.StandardMaterial("trottoirMat", scene);
+        trottoirMat.diffuseColor = new BABYLON.Color3(0.6, 0.6, 0.6); // Gris clair béton
+
+        const sableMat = new BABYLON.StandardMaterial("sableMat", scene);
+        sableMat.diffuseColor = new BABYLON.Color3(0.85, 0.75, 0.5); // Sable jaune/marron
+
+        const eauMat = new BABYLON.StandardMaterial("eauMat", scene);
+        eauMat.diffuseColor = new BABYLON.Color3(0, 0.4, 0.8); // Bleu océan
+        eauMat.alpha = 0.85; // Eau semi-transparente
+        eauMat.specularColor = new BABYLON.Color3(1, 1, 1);
+
+        const herbeMat = new BABYLON.StandardMaterial("herbeMat", scene);
+        herbeMat.diffuseColor = new BABYLON.Color3(0.3, 0.6, 0.3); // Vert forêt/plaine
+        herbeMat.specularColor = new BABYLON.Color3(0, 0, 0);
+
+        // --- ASSEMBLAGE ---
+        const trackMesh = BABYLON.MeshBuilder.CreateRibbon("road", { pathArray: [roadPath1, roadPath2] }, scene);
+        trackMesh.material = asphalte;
+
+        const leftTrottoir = BABYLON.MeshBuilder.CreateRibbon("lTrot", { pathArray: [tLeft1, tLeft2] }, scene);
+        leftTrottoir.material = trottoirMat;
+
+        const rightTrottoir = BABYLON.MeshBuilder.CreateRibbon("rTrot", { pathArray: [tRight1, tRight2] }, scene);
+        rightTrottoir.material = trottoirMat;
+
+        const beachMesh = BABYLON.MeshBuilder.CreateRibbon("beach", { pathArray: [beach1, beach2] }, scene);
+        beachMesh.material = sableMat;
+
+        const oceanMesh = BABYLON.MeshBuilder.CreateRibbon("ocean", { pathArray: [ocean1, ocean2] }, scene);
+        oceanMesh.material = eauMat;
+
+        const grassMesh = BABYLON.MeshBuilder.CreateRibbon("grass", { pathArray: [grass1, grass2] }, scene);
+        grassMesh.material = herbeMat;
+
+        // ========== IMMEUBLES D'ALIGNEMENT (DROITE) ==========
+        // Générer une ville qui borde la route de l'autre côté de la mer
+        const bMats = [
+            new BABYLON.StandardMaterial("b1", scene),
+            new BABYLON.StandardMaterial("b2", scene),
+            new BABYLON.StandardMaterial("b3", scene)
+        ];
+        bMats[0].diffuseColor = new BABYLON.Color3(0.8, 0.8, 0.9); // Blanc/Verre
+        bMats[1].diffuseColor = new BABYLON.Color3(0.3, 0.5, 0.8); // Bleu sombre
+        bMats[2].diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.3); // Béton sombre
+
+        for (let bz = -100; bz < trackLength; bz += 45) { // Un immeuble tous les 45 mètres
+            let trackX = getTrackX(bz);
+            let nextX = getTrackX(bz + 10);
+            let angle = Math.atan2(nextX - trackX, 10);
+
+            let bWidth = 25 + Math.random() * 15;
+            let bDepth = 35 + Math.random() * 10;
+            let bHeight = 40 + Math.random() * 90; // Différentes hauteurs de buildings
+
+            const building = BABYLON.MeshBuilder.CreateBox("build" + bz, { width: bWidth, height: bHeight, depth: bDepth }, scene);
+            // Placement à 60m du centre (au-delà du trottoir qui lui fait 36m)
+            building.position = new BABYLON.Vector3(trackX + 60, getTrackY(bz) + bHeight / 2, bz);
+            building.rotation.y = Math.atan2(nextX - trackX, 10); // Aligné à la route
+
+            building.material = bMats[Math.floor(Math.random() * bMats.length)];
+        }
+
+        // Ligne d'arrivée
+        const finishX = getTrackX(FINISH_LINE_Z);
+        const finishY = getTrackY(FINISH_LINE_Z);
+        const finishLine = BABYLON.MeshBuilder.CreatePlane("finish", { width: trackWidth, height: 15 }, scene);
+        finishLine.rotation.x = Math.PI / 2;
+        finishLine.position.z = FINISH_LINE_Z;
+        finishLine.position.x = finishX;
+        finishLine.position.y = finishY + 0.1;
+        const finishMat = new BABYLON.StandardMaterial("finishMat", scene);
+        finishMat.emissiveColor = new BABYLON.Color3(1, 1, 0);
+        finishMat.diffuseColor = new BABYLON.Color3(1, 1, 0);
+        finishLine.material = finishMat;
+
+        // ========== CUBES DE BOOST ==========
+        const boosterCubes = [];
+        const boosterMat = new BABYLON.StandardMaterial("boostMat", scene);
+        boosterMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0); // Jaune/Or brillant
+        boosterMat.diffuseColor = new BABYLON.Color3(1, 1, 0);
+
+        for (let i = 0; i < 40; i++) {
+            const cube = BABYLON.MeshBuilder.CreateBox("booster" + i, { size: 1.5 }, scene);
+            const cz = 200 + Math.random() * 4600;
+            cube.position.z = cz;
+            cube.position.x = getTrackX(cz) - 25 + Math.random() * 50;
+            cube.position.y = getTrackY(cz) + 1.5; // Suits l'altitude de la piste
+            cube.material = boosterMat;
+            boosterCubes.push(cube);
+        }
+
+        // ========== RAMPES DE SAUT ==========
+        const ramps = [];
+        const rampMat = new BABYLON.StandardMaterial("rampMat", scene);
+        rampMat.emissiveColor = new BABYLON.Color3(0, 1, 0.5);
+        rampMat.alpha = 0.8;
+
+        for (let i = 0; i < 15; i++) {
+            const ramp = BABYLON.MeshBuilder.CreateBox("ramp" + i, { width: 14, height: 0.5, depth: 8 }, scene);
+            const rz = 300 + Math.random() * 4400;
+            ramp.position.z = rz;
+            ramp.position.x = getTrackX(rz) - 15 + Math.random() * 30;
+            ramp.position.y = getTrackY(rz) + 0.5; // Suits la colline
+
+            // Inclinaison de base -0.25 (vers le haut), plus la pente de la colline
+            const slope = (getTrackY(rz + 5) - getTrackY(rz)) / 5;
+            ramp.rotation.x = -0.25 - Math.atan(slope);
+
+            ramp.material = rampMat;
+            ramps.push(ramp);
+        }
+
+        // ========== PARTICULES DE DRIFT ==========
+        const driftParticles = new BABYLON.ParticleSystem("drift", 500, scene);
+        const smokeTex = new BABYLON.DynamicTexture("smokeTex", 64, scene);
+        const ctx = smokeTex.getContext();
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(32, 32, 30, 0, Math.PI * 2);
+        ctx.fill();
+        smokeTex.update();
+        driftParticles.particleTexture = smokeTex;
+
+        const emitter = new BABYLON.TransformNode("emitter", scene);
+        emitter.parent = car;
+        emitter.position = new BABYLON.Vector3(0, -0.7, -2); // A ras du sol sous l'arrière de la voiture
+        driftParticles.emitter = emitter;
+
+        driftParticles.minEmitBox = new BABYLON.Vector3(-1.5, 0, 0);
+        driftParticles.maxEmitBox = new BABYLON.Vector3(1.5, 0, 0);
+        driftParticles.color1 = new BABYLON.Color4(0.8, 0.8, 0.8, 0.5); // Fumée de pneu grise
+        driftParticles.colorDead = new BABYLON.Color4(0.1, 0.1, 0.1, 0.0);
+        driftParticles.minLifeTime = 0.2;
+        driftParticles.maxLifeTime = 0.4;
+        driftParticles.emitRate = 0; // Éteint par défaut
+        driftParticles.minEmitPower = 5;
+        driftParticles.maxEmitPower = 10;
+        driftParticles.updateSpeed = 0.02;
+        driftParticles.start();
+
+        // ========== BOUCLE DE RENDU ==========
+        engine.runRenderLoop(() => {
+            if (!gameActive) {
+                driftParticles.emitRate = 0;
+                scene.render();
+                return;
+            }
+            let visualAngle = carAngle;
+            let isDrifting = false; // Portée globale à la frame
+
+            // Bloque tous les contrôles si le compte à rebours n'est pas terminé
+            if (!isRacing) {
+                carVelocity = 0;
+                boostActive = false;
+                driftParticles.emitRate = 0;
+            } else {
+                // Activation manuelle du boost avec la touche ESPACE
+                if (keys[' '] && boostEnergy > 0) {
+                    boostActive = true;
+                    boostEnergy = Math.max(boostEnergy - 0.6, 0); // Vide la jauge progressivement (~3 secondes pour 100%)
+                } else {
+                    boostActive = false;
+                }
+
+                // Mouvement du véhicule (Physique "Asphalt Engine" en KM/H)
+                let targetMaxKmh = boostActive ? 420 : 250; // Vitesse de croisière vs Nitro
+                let accelKmh = boostActive ? 8 : 1.5; // La Nitro propulse beaucoup plus fort
+
+                // Mode "Extreme Speed" si l'énergie est au max et qu'on booste
+                if (boostActive && boostEnergy > 80) targetMaxKmh = 2500;
+
+                if (keys['ArrowUp']) {
+                    carVelocity = Math.min(carVelocity + accelKmh, targetMaxKmh);
+                } else if (keys['ArrowDown']) {
+                    carVelocity = Math.max(carVelocity - 5, -50); // Freinage puissant
+                } else {
+                    // Décélération naturelle (friction de l'air)
+                    if (carVelocity > 0) carVelocity = Math.max(carVelocity - 1.2, 0);
+                    else if (carVelocity < 0) carVelocity = Math.min(carVelocity + 2, 0);
+                }
+
+                // Conversion KM/H -> Unités/Frame (On divise par 3.6 pour m/s, puis par ~60 fps)
+                let unitsPerFrame = (carVelocity / 3.6) / 60;
+                // Mécanique de DRIFT (Toggled Mode)
+                // On ne dérape que si le mode est activé, qu'on roule à plus de 80 KM/H, et qu'on tourne
+                if (isDriftMode && carVelocity > 80 && (keys['ArrowLeft'] || keys['ArrowRight'])) {
+                    isDrifting = true;
+                }
+
+                // Direction & Dérapage Visual
+                let turnSpeed = boostActive ? 0.03 : 0.06;
+                if (isDrifting) turnSpeed = 0.065; // Très légère augmentation de la maniabilité (presque inchangé)
+
+                if (keys['ArrowLeft']) {
+                    carAngle -= turnSpeed;
+                    if (isDrifting) visualAngle = carAngle - 0.25; // Effet visuel très doux (-0.25 au lieu de -0.6)
+                } else if (keys['ArrowRight']) {
+                    carAngle += turnSpeed;
+                    if (isDrifting) visualAngle = carAngle + 0.25; // Effet visuel très doux
+                }
+
+                // Le drift ralentit doucement la voiture mais recharge la jauge d'énergie Nitro
+                if (isDrifting && !boostActive) {
+                    carVelocity = Math.max(carVelocity - 2, 120); // Ralentissement modéré en KM/H
+                    boostEnergy = Math.min(boostEnergy + 0.2, 100); // Recharge standard
+                    driftParticles.emitRate = 80; // Peu de fumée de pneu
+                } else {
+                    driftParticles.emitRate = 0;
+                }
+            } // Fin de condition de course
+
+            // Conversion finale pour le déplacement
+            // On multiplie par 3 pour que la vitesse soit vraiment ressentie visuellement
+            let moveStep = ((carVelocity / 3.6) / 60) * 1.2;
+
+            // Mise à jour de la position avec le vrai vecteur de vitesse directionnel (Synchronisé KM/H)
+            car.position.x += Math.sin(carAngle) * moveStep;
+            car.position.z += Math.cos(carAngle) * moveStep;
+            car.rotation.y = visualAngle;
+
+            // ========== PROPULSION CAMÉRA (Style Asphalt) ==========
+            // La caméra recule et le FOV s'étire proportionnellement à la vitesse réelle
+            camera.fov = 0.8 + (carVelocity / 4000);
+            camera.radius = 12 + (carVelocity / 150); // Recul dynamique
+
+            // Vibrations de cockpit à très haute vitesse
+            if (carVelocity > 1000) {
+                camera.position.x += (Math.random() - 0.5) * 0.15;
+                camera.position.y += (Math.random() - 0.5) * 0.15;
+            }
+
+            // ========== GRAVITÉ ET SAUTS ==========
+            carVelocityY -= gravity;
+            car.position.y += carVelocityY;
+
+            const currentGroundHeight = getTrackY(car.position.z);
+            const carStandY = currentGroundHeight + 0.75; // 0.75 est la hauteur des pneus par rapport au centre
+
+            // Atterrissage au sol (sur la pente)
+            if (car.position.y <= carStandY) {
+                car.position.y = carStandY;
+                carVelocityY = 0;
+
+                // Incliner visuellement la voiture avec la pente !
+                const slope = (getTrackY(car.position.z + 5) - getTrackY(car.position.z)) / 5;
+                car.rotation.x = -Math.atan(slope);
+            }
+
+            // Détection des rampes de saut (seulement si la voiture est proche du sol)
+            if (car.position.y <= carStandY + 0.5 && carVelocity > 50) {
+                for (let i = 0; i < ramps.length; i++) {
+                    const r = ramps[i];
+                    if (Math.abs(car.position.x - r.position.x) < 7 && // width = 14
+                        Math.abs(car.position.z - r.position.z) < 4) { // depth = 8
+                        // Propulsion verticale proportionnelle à la vitesse réelle (Asphalt style)
+                        carVelocityY = Math.max(0.7, (carVelocity / 350));
+                        car.position.y += 0.5;
+                        car.rotation.x = -0.3; // Cabrage en l'air
+                        break;
+                    }
+                }
+            }
+
+            // Logique de collision avec les cubes de BOOST
+            for (let i = boosterCubes.length - 1; i >= 0; i--) {
+                const cube = boosterCubes[i];
+                // Fait tournoyer le cube pour qu'il soit joli à regarder
+                cube.rotation.y += 0.05;
+                cube.rotation.x += 0.02;
+
+                // Si on ramasse un cube on recharge la batterie
+                const dist = BABYLON.Vector3.Distance(car.position, cube.position);
+                if (dist < 3.0) {
+                    cube.dispose(); // Détruit le cube
+                    boosterCubes.splice(i, 1);
+
+                    // Ajoute un tiers de l'énergie (3 cubes = 100%)
+                    boostEnergy = Math.min(boostEnergy + 34, 100);
+                }
+            }
+
+            // Collisions dynamiques avec les murs (Virages)
+            const carHalfWidth = 1.5;
+            let trackCenterX = getTrackX(car.position.z);
+            // On permet à la voiture de monter sur le trottoir (+36m) mais pas dans les immeubles ou dans la mer (-36m)
+            if (car.position.x < trackCenterX - 34) {
+                car.position.x = trackCenterX - 34;
+                carVelocity = Math.max(0, carVelocity - 0.2); // Frotte sur la barrière
+            }
+            if (car.position.x > trackCenterX + 34) {
+                car.position.x = trackCenterX + 34;
+                carVelocity = Math.max(0, carVelocity - 0.2);
+            }
+
+            // Empêcher d'aller en arrière de la ligne de départ
+            if (car.position.z < -20) {
+                car.position.z = -20;
+                carVelocity = 0;
+            }
+
+            // Bots Movement (IA de tracé de courbe + Pentes)
+            bots.forEach((bot, idx) => {
+                if (isRacing && bot.mesh.position.z < FINISH_LINE_Z + 200) {
+                    // Les bots accélèrent aussi en KM/H
+                    let botMaxKmh = bot.maxSpeed * 100; // ex: 2.5 -> 250 kmh
+                    bot.currentSpeed = Math.min(bot.currentSpeed + 2, botMaxKmh);
+
+                    let botMoveStep = (bot.currentSpeed / 3.6) / 60;
+                    bot.mesh.position.z += botMoveStep;
+
+                    const offset = (idx - 1) * 10; // Voies séparées (-10, 0, 10)
+                    const targetX = getTrackX(bot.mesh.position.z) + offset;
+                    const targetY = getTrackY(bot.mesh.position.z) + 0.75;
+
+                    const dx = targetX - bot.mesh.position.x;
+                    bot.mesh.position.x += dx * 0.2; // Lissage du virage
+                    bot.mesh.position.y = targetY; // Monte et descend la pente
+
+                    // Rotation fluide du bot dans les virages et pentes
+                    const nextZ = bot.mesh.position.z + 10;
+                    const nextX = getTrackX(nextZ) + offset;
+                    bot.mesh.rotation.y = Math.atan2(nextX - bot.mesh.position.x, nextZ - bot.mesh.position.z);
+
+                    const botSlope = (getTrackY(nextZ) - getTrackY(bot.mesh.position.z)) / 10;
+                    bot.mesh.rotation.x = -Math.atan(botSlope);
+                }
+            });
+
+            // Suivi de la lumière
+            light.position.x = car.position.x;
+            light.position.z = car.position.z;
+
+            // ========== MINIMAP (RADAR 2D) ==========
+            const minimap = document.getElementById("minimap");
+            const ctxMap = minimap.getContext("2d");
+            ctxMap.clearRect(0, 0, 150, 300);
+
+            // Tracé de la piste globale au crayon blanc
+            ctxMap.beginPath();
+            ctxMap.strokeStyle = "rgba(255, 255, 255, 0.4)";
+            ctxMap.lineWidth = 3;
+            for (let mz = 0; mz <= FINISH_LINE_Z; mz += 100) {
+                let mx = getTrackX(mz);
+                // Normalisation : X de -250 à 250 -> 0 à 150 px. Z de 0 à 5000 -> 300 à 0 px.
+                let pxlX = ((mx + 250) / 500) * 150;
+                let pxlY = 300 - (mz / FINISH_LINE_Z) * 300;
+                if (mz === 0) ctxMap.moveTo(Math.floor(pxlX), Math.floor(pxlY));
+                else ctxMap.lineTo(Math.floor(pxlX), Math.floor(pxlY));
+            }
+            ctxMap.stroke();
+
+            // Tracé des bots sur le radar radar de la Minimap
+            bots.forEach(bot => {
+                let bx = ((bot.mesh.position.x + 250) / 500) * 150;
+                let by = 300 - (bot.mesh.position.z / FINISH_LINE_Z) * 300;
+                ctxMap.fillStyle = bot.colorBase ? bot.colorBase.toHexString() : "#ffffff";
+                ctxMap.beginPath();
+                ctxMap.arc(Math.floor(bx), Math.floor(by), 4, 0, Math.PI * 2);
+                ctxMap.fill();
+            });
+
+            // Tracé du Joueur (Point Cyan scintillant plus gros)
+            let plrX = ((car.position.x + 250) / 500) * 150;
+            let plrY = 300 - (car.position.z / FINISH_LINE_Z) * 300;
+            ctxMap.fillStyle = "#00ffff"; // Cyan
+            ctxMap.beginPath();
+            ctxMap.arc(Math.floor(plrX), Math.floor(plrY), 6, 0, Math.PI * 2);
+            ctxMap.fill();
+            // Cerclage blanc
+            ctxMap.strokeStyle = "#ffffff";
+            ctxMap.lineWidth = 2;
+            ctxMap.stroke();
+
+            // UI (Synchronisée avec le moteur Asphalt)
+            speed = Math.floor(Math.abs(carVelocity));
+            let distance = Math.max(0, Math.floor(car.position.z));
+
+            // Calcul de la place en temps réel
+            let currentPlace = 1;
+            bots.forEach(b => {
+                if (b.mesh.position.z > car.position.z) currentPlace++;
+            });
+
+            document.getElementById("distance").textContent = `POS: ${currentPlace}/${bots.length + 1} | DIST: ${distance}M / ${FINISH_LINE_Z}M`;
+            document.getElementById("speedometer").textContent = `SPEED: ${speed} KM/H`;
+
+            // Affichage UI du Boost et Drift
+            document.getElementById("boostBar").style.width = `${boostEnergy}%`;
+
+            if (boostActive) {
+                document.getElementById("boostLabel").textContent = "BOOSTING 🔥";
+                document.getElementById("boostLabel").classList.add("boostTextActive");
+                document.getElementById("speedometer").textContent = `SPEED: ${speed} KM/H`;
+                document.getElementById("speedometer").style.color = "#ff006e";
+                document.getElementById("speedometer").style.textShadow = "0 0 20px #ff006e";
+            } else {
+                let statusText = boostEnergy >= 100 ? "BOOST FULL (Appuie sur ESPACE)" : "BOOST (Maintiens ESPACE)";
+                document.getElementById("boostLabel").textContent = statusText;
+                document.getElementById("boostLabel").classList.remove("boostTextActive");
+
+                let driftText = "";
+                if (isDrifting) driftText = " (DRIFTING 💨)";
+                else if (isDriftMode) driftText = " [DRIFT MODE ON]";
+
+                document.getElementById("speedometer").textContent = `SPEED: ${speed} KM/H${driftText}`;
+                document.getElementById("speedometer").style.color = isDrifting ? "#ffaa00" : (isDriftMode ? "#ff5500" : "#00ffff");
+            }
+
+            // Alerte ligne d'arrivée
+            if (distance > FINISH_LINE_Z - 500 && distance < FINISH_LINE_Z) {
+                document.getElementById("finishWarning").style.display = "block";
+            } else {
+                document.getElementById("finishWarning").style.display = "none";
+            }
+
+            // Victoire ou Fin de course
+            if (car.position.z >= FINISH_LINE_Z) {
+                endGame(true, currentPlace);
+            }
+
+            scene.render();
+        });
+
+        // ========== MINUTEUR ==========
+        // Minuteur du jeu
+        const timerInterval = setInterval(() => {
+            if (gameActive && isRacing) {
+                timeLeft--;
+                document.getElementById("timer").textContent = `TIME: ${timeLeft}`;
+                if (timeLeft <= 0) {
+                    endGame(); // Temps écoulé
+                }
+            }
+        }, 1000);
+
+        // ========== FIN DE JEU ==========
+        function endGame(finished, place = 1) {
+            gameActive = false;
+            clearInterval(timerInterval);
+            document.getElementById("gameOver").style.display = "block";
+
+            if (finished) {
+                const timeTaken = 60 - timeLeft;
+                if (place === 1) {
+                    document.getElementById("gameResult").textContent = "YOU WIN! 🥇";
+                    document.getElementById("gameResult").style.color = "#ffff00";
+                    document.getElementById("gameOver").style.borderColor = "#ffff00";
+                } else {
+                    document.getElementById("gameResult").textContent = `FINISHED ${place}${place === 2 ? 'nd' : place === 3 ? 'rd' : 'th'} 🥈`;
+                    document.getElementById("gameResult").style.color = "#ffaa00";
+                    document.getElementById("gameOver").style.borderColor = "#ffaa00";
+                }
+                document.getElementById("finalInfo").textContent = `TIME: ${timeTaken}s`;
+            } else {
+                document.getElementById("gameResult").textContent = "TIME'S UP! ⏰";
+                document.getElementById("gameResult").style.color = "#ff0000"; // Rouge
+                document.getElementById("gameOver").style.borderColor = "#ff0000";
+                document.getElementById("finalInfo").textContent = `DISTANCE REACHED: ${Math.floor(car.position.z)}M`;
+            }
+        }
+
+        window.addEventListener("resize", () => {
+            engine.resize();
+        });
+    </script>
+</body>
+
+</html>
