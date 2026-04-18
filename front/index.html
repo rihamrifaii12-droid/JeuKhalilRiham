@@ -3,7 +3,10 @@
 
 <head>
     <meta charset="utf-8">
-    <title>TIME TRIAL 🏎️</title>
+    <title>ASPHALT LEGENDS 🏎️</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
     <!-- Module GTLF/GLB pour charger les modèles ultra réalistes -->
@@ -13,9 +16,8 @@
 
 <body>
     <canvas id="renderCanvas"></canvas>
-    <div id="distance">DISTANCE: 0M / 5000M</div>
-    <div id="timer">TIME: 60</div>
-    <div id="speedometer">SPEED: 0 KM/H</div>
+    <div id="distance" class="hud-panel">POS: 1 | DISTANCE: 0M</div>
+    <div id="speedometer" class="hud-panel">0<span>KM/H</span></div>
     <div id="boostContainer">
         <div id="boostLabel">BOOST (Maintiens ESPACE)</div>
         <div id="boostBarBg">
@@ -25,6 +27,7 @@
     <div id="finishWarning">FINISH LINE AHEAD!</div>
     <div id="countdownDisplay">3</div>
     <canvas id="minimap" width="150" height="300"></canvas>
+    <button id="photoButton">📸</button>
     <div id="gameOver">
         <h1 id="gameResult">GAME OVER!</h1>
         <p id="finalInfo">...</p>

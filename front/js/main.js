@@ -1,41 +1,67 @@
 import { canvas, engine, scene, camera, light } from './scene_setup.js';
 import { getTrackX, getTrackY } from './utils.js';
-import { FINISH_LINE_Z, TIME_LIMIT } from './config.js';
-import { initTrack, initBuildings, initFinishLine } from './track.js';
-import { initBoosters, initRamps } from './objects.js';
+import { FINISH_LINE_Z } from './config.js';
+import { CoteAzur } from './Circuit.js';
+import { initBoosters, initRamps, initTrackScreens } from './objects.js';
 import { initDriftParticles } from './particles.js';
 import { initBots } from './bots.js';
 import { initPlayer, setupInputs } from './player.js';
-import { initMinimap, updateMinimap, updateHUD, showGameOver, startCountdown } from './ui.js';
+import { initMinimap, updateMinimap, updateHUD, showGameOver, startCountdown, takePhoto } from './ui.js';
+import { AudioManager } from './audio.js';
 
 // ========== VARIABLES DU JEU ==========
 let gameActive = true;
 let isRacing = false;
-let timeLeft = TIME_LIMIT;
-let carVelocity = 0;
-let carVelocityY = 0;
-let carAngle = 0;
-let boostEnergy = 0;
-let boostActive = false;
-
-const gravity = 0.04;
+let photoCooldown = 0;
 
 // Initialisation
-initTrack();
-initBuildings();
-const finishLine = initFinishLine();
+const circuit = new CoteAzur(scene);
+circuit.initTrack();
+circuit.initBuildings();
+circuit.initBarriers();
+circuit.initStreetLights();
+circuit.initRoadMarkings();
+circuit.initSun();
+const finishLine = circuit.initFinishLine();
 const boosterCubes = initBoosters();
 const ramps = initRamps();
+const trackScreens = initTrackScreens();
 const bots = initBots();
-const car = initPlayer();
-const driftParticles = initDriftParticles(car);
+
+const playerCar = initPlayer(scene, camera);
+const driftParticles = initDriftParticles(playerCar.mesh);
 const { keys, inputState } = setupInputs();
 const { ctxMap } = initMinimap();
 
-// Démarrage du compte à rebours
-startCountdown(() => {
-    isRacing = true;
-});
+const photoButton = document.getElementById('photoButton');
+if (photoButton) photoButton.addEventListener('click', () => takePhoto(engine, camera));
+
+// Moteur Audio
+const audio = new AudioManager(scene);
+const startAudio = () => { 
+    audio.init(); 
+    window.removeEventListener('keydown', startAudio); 
+    window.removeEventListener('click', startAudio);
+};
+window.addEventListener('keydown', startAudio);
+window.addEventListener('click', startAudio);
+
+startCountdown(() => { isRacing = true; });
+
+// Ul pour Takedown
+const takedownUI = document.createElement("div");
+takedownUI.style = "position:absolute; top:30%; left:50%; transform:translate(-50%,-50%) scale(0); color:#ff00ff; font-family:'Impact', sans-serif; font-size:100px; text-shadow:0 0 20px #ff00ff, 0 0 50px #fff; transition:transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity:0; pointer-events:none; z-index:1000;";
+takedownUI.innerText = "TAKEDOWN !";
+document.body.appendChild(takedownUI);
+
+function triggerTakedownMsg() {
+    takedownUI.style.opacity = "1";
+    takedownUI.style.transform = "translate(-50%, -50%) scale(1)";
+    setTimeout(() => {
+        takedownUI.style.opacity = "0";
+        takedownUI.style.transform = "translate(-50%, -50%) scale(1.5)";
+    }, 1500);
+}
 
 // ========== BOUCLE DE RENDU ==========
 engine.runRenderLoop(() => {
@@ -45,192 +71,191 @@ engine.runRenderLoop(() => {
         return;
     }
 
-    let visualAngle = carAngle;
-    let isDrifting = false;
+    // Mise à jour de la voiture
+    playerCar.update(keys, inputState, isRacing, ramps, boosterCubes, () => {
+        if (photoCooldown <= 0) { takePhoto(engine, camera); photoCooldown = 300; }
+    });
+    
+    // Particules de Drift
+    driftParticles.emitRate = playerCar.isDrifting ? 80 : 0;
 
-    if (!isRacing) {
-        carVelocity = 0;
-        boostActive = false;
-        driftParticles.emitRate = 0;
-    } else {
-        // Boost
-        if (keys[' '] && boostEnergy > 0) {
-            boostActive = true;
-            boostEnergy = Math.max(boostEnergy - 0.6, 0);
-        } else {
-            boostActive = false;
-        }
-
-        // Physique
-        let targetMaxKmh = boostActive ? 420 : 250;
-        let accelKmh = boostActive ? 8 : 1.5;
-        if (boostActive && boostEnergy > 80) targetMaxKmh = 2500;
-
-        if (keys['ArrowUp']) {
-            carVelocity = Math.min(carVelocity + accelKmh, targetMaxKmh);
-        } else if (keys['ArrowDown']) {
-            carVelocity = Math.max(carVelocity - 5, -50);
-        } else {
-            if (carVelocity > 0) carVelocity = Math.max(carVelocity - 1.2, 0);
-            else if (carVelocity < 0) carVelocity = Math.min(carVelocity + 2, 0);
-        }
-
-        // Drift
-        if (inputState.isDriftMode && carVelocity > 80 && (keys['ArrowLeft'] || keys['ArrowRight'])) {
-            isDrifting = true;
-        }
-
-        let turnSpeed = boostActive ? 0.03 : 0.06;
-        if (isDrifting) turnSpeed = 0.065;
-
-        if (keys['ArrowLeft']) {
-            carAngle -= turnSpeed;
-            if (isDrifting) visualAngle = carAngle - 0.25;
-        } else if (keys['ArrowRight']) {
-            carAngle += turnSpeed;
-            if (isDrifting) visualAngle = carAngle + 0.25;
-        }
-
-        if (isDrifting && !boostActive) {
-            carVelocity = Math.max(carVelocity - 2, 120);
-            boostEnergy = Math.min(boostEnergy + 0.2, 100);
-            driftParticles.emitRate = 80;
-        } else {
-            driftParticles.emitRate = 0;
-        }
-    }
-
-    // Déplacement
-    let moveStep = ((carVelocity / 3.6) / 60) * 1.2;
-    car.position.x += Math.sin(carAngle) * moveStep;
-    car.position.z += Math.cos(carAngle) * moveStep;
-    car.rotation.y = visualAngle;
-
-    // Caméra
-    camera.fov = 0.8 + (carVelocity / 4000);
-    camera.radius = 12 + (carVelocity / 150);
-    if (carVelocity > 1000) {
-        camera.position.x += (Math.random() - 0.5) * 0.15;
-        camera.position.y += (Math.random() - 0.5) * 0.15;
-    }
-
-    // Gravité
-    carVelocityY -= gravity;
-    car.position.y += carVelocityY;
-    const currentGroundHeight = getTrackY(car.position.z);
-    const carStandY = currentGroundHeight + 0.75;
-
-    if (car.position.y <= carStandY) {
-        car.position.y = carStandY;
-        carVelocityY = 0;
-        const slope = (getTrackY(car.position.z + 5) - getTrackY(car.position.z)) / 5;
-        car.rotation.x = -Math.atan(slope);
-    }
-
-    // Rampes
-    if (car.position.y <= carStandY + 0.5 && carVelocity > 50) {
-        for (let i = 0; i < ramps.length; i++) {
-            const r = ramps[i];
-            if (Math.abs(car.position.x - r.position.x) < 7 && Math.abs(car.position.z - r.position.z) < 4) {
-                carVelocityY = Math.max(0.7, (carVelocity / 350));
-                car.position.y += 0.5;
-                car.rotation.x = -0.3;
-                break;
-            }
-        }
-    }
-
-    // Boosters
+    // --- BOOSTERS (COLLECTE) ---
     for (let i = boosterCubes.length - 1; i >= 0; i--) {
-        const cube = boosterCubes[i];
-        cube.rotation.y += 0.05;
-        cube.rotation.x += 0.02;
-        if (BABYLON.Vector3.Distance(car.position, cube.position) < 3.0) {
-            cube.dispose();
+        const bottle = boosterCubes[i];
+        bottle.rotation.y += 0.04;
+        const offset = bottle.userData ? bottle.userData.offset : 0;
+        bottle.position.y += Math.sin(Date.now() / 200 + offset) * 0.01;
+
+        if (BABYLON.Vector3.Distance(playerCar.mesh.position, bottle.position) < 4.0) {
+            const reward = bottle.nitroType === "blue" ? 60 : 25;
+            playerCar.boostEnergy = Math.min(playerCar.boostEnergy + reward, 100);
+            bottle.dispose();
             boosterCubes.splice(i, 1);
-            boostEnergy = Math.min(boostEnergy + 34, 100);
         }
     }
 
-    // Collisions murs
-    let trackCenterX = getTrackX(car.position.z);
-    if (car.position.x < trackCenterX - 34) {
-        car.position.x = trackCenterX - 34;
-        carVelocity = Math.max(0, carVelocity - 0.2);
-    }
-    if (car.position.x > trackCenterX + 34) {
-        car.position.x = trackCenterX + 34;
-        carVelocity = Math.max(0, carVelocity - 0.2);
+    // --- COLLISIONS MURS ---
+    const trackCenterX = getTrackX(playerCar.mesh.position.z);
+    const roadLeft = trackCenterX - 30;
+    const roadRight = trackCenterX + 30;
+    const sidewalkLeft = trackCenterX - 40;
+    const sidewalkRight = trackCenterX + 40;
+
+    // On ne gère les collisions murs que si on est proche du sol
+    const groundY = getTrackY(playerCar.mesh.position.z);
+    if (playerCar.mesh.position.y < groundY + 2.5) {
+        if (playerCar.mesh.position.x < roadLeft && playerCar.mesh.position.x >= sidewalkLeft) {
+            playerCar.mesh.position.x = roadLeft;
+            playerCar.velocity = Math.max(playerCar.velocity * 0.95, 0);
+        } else if (playerCar.mesh.position.x < sidewalkLeft) {
+            playerCar.mesh.position.x = sidewalkLeft;
+            playerCar.angle = Math.PI - playerCar.angle; // Rebond
+            playerCar.velocity = Math.max(playerCar.velocity * 0.6, 0);
+            if (photoCooldown <= 0) { takePhoto(engine, camera); photoCooldown = 300; }
+        }
+
+        if (playerCar.mesh.position.x > roadRight && playerCar.mesh.position.x <= sidewalkRight) {
+            playerCar.mesh.position.x = roadRight;
+            playerCar.velocity = Math.max(playerCar.velocity * 0.95, 0);
+        } else if (playerCar.mesh.position.x > sidewalkRight) {
+            playerCar.mesh.position.x = sidewalkRight;
+            playerCar.angle = Math.PI - playerCar.angle;
+            playerCar.velocity = Math.max(playerCar.velocity * 0.6, 0);
+            if (photoCooldown <= 0) { takePhoto(engine, camera); photoCooldown = 300; }
+        }
     }
 
-    if (car.position.z < -20) {
-        car.position.z = -20;
-        carVelocity = 0;
-    }
+    if (photoCooldown > 0) photoCooldown--;
 
-    // Bots
+    // --- BOTS (IA AMÉLIORÉE) ---
     bots.forEach((bot, idx) => {
+        if (bot.isDestroyed) return; // Ne bouge plus s'il est détruit
+
         if (isRacing && bot.mesh.position.z < FINISH_LINE_Z + 200) {
-            let botMaxKmh = bot.maxSpeed * 100;
-            bot.currentSpeed = Math.min(bot.currentSpeed + 2, botMaxKmh);
+
+            // 1. SYSTÈME DE BOOST ALÉATOIRE
+            if (bot.boostTimer > 0) {
+                bot.boostTimer--;
+            } else if (bot.boostCooldown > 0) {
+                bot.boostCooldown--;
+            } else {
+                // Déclenche un boost de 2 à 4 secondes
+                bot.boostTimer = 120 + Math.floor(Math.random() * 120);
+                // Prochain boost dans 5 à 10 secondes
+                bot.boostCooldown = 300 + Math.floor(Math.random() * 300);
+            }
+
+            const isBoosting = bot.boostTimer > 0;
+            let botMaxKmh = bot.maxSpeed * 100 * (isBoosting ? 1.4 : 1.0);
+            let botAccel   = isBoosting ? 4 : 2;
+            bot.currentSpeed = Math.min(bot.currentSpeed + botAccel, botMaxKmh);
             let botMoveStep = (bot.currentSpeed / 3.6) / 60;
             bot.mesh.position.z += botMoveStep;
 
-            const offset = (idx - 1) * 10;
+            // 2. TRAJECTOIRE IMPARFAITE (oscillation pour ressembler à un humain)
+            bot.wobble += 0.018;
+            const wobbleOffset = Math.sin(bot.wobble) * 3;
+
+            const offset = bot.laneOffset + wobbleOffset;
             const targetX = getTrackX(bot.mesh.position.z) + offset;
             const targetY = getTrackY(bot.mesh.position.z) + 0.75;
-            bot.mesh.position.x += (targetX - bot.mesh.position.x) * 0.2;
+            bot.mesh.position.x += (targetX - bot.mesh.position.x) * 0.15;
             bot.mesh.position.y = targetY;
 
             const nextZ = bot.mesh.position.z + 10;
             bot.mesh.rotation.y = Math.atan2(getTrackX(nextZ) + offset - bot.mesh.position.x, 10);
             bot.mesh.rotation.x = -Math.atan((getTrackY(nextZ) - getTrackY(bot.mesh.position.z)) / 10);
+
+            // Mise à jour visuels (Ombre)
+            if (bot.shadow) {
+                bot.shadow.position.x = bot.mesh.position.x;
+                bot.shadow.position.z = bot.mesh.position.z;
+                bot.shadow.position.y = targetY - 0.65; // Ajusté pour le sol
+                bot.shadow.rotation.y = bot.mesh.rotation.y;
+            }
         }
     });
 
-    // Lumière
-    light.position.x = car.position.x;
-    light.position.z = car.position.z;
+    // 3. COLLISIONS JOUEUR <-> BOTS (Aspiration + Takedown)
+    playerCar.isDrafting = false;
+    bots.forEach(bot => {
+        if (bot.isDestroyed) return;
 
-    // UI Updates
-    updateMinimap(ctxMap, car, bots);
-    
+        const dx = playerCar.mesh.position.x - bot.mesh.position.x;
+        const dz = playerCar.mesh.position.z - bot.mesh.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        // ASPIRATION (Drafting) : On est juste derrière le bot
+        if (dz < -5 && dz > -40 && Math.abs(dx) < 3.5) {
+            playerCar.isDrafting = true;
+            if (playerCar.boostEnergy < 100) playerCar.boostEnergy += 0.2; // Remplissage gratuit
+        }
+
+        // COLLISION
+        if (dist < 5.5 && dist > 0.01) {
+            if (playerCar.boostActive || playerCar.shockwaveActive) {
+                // TAKEDOWN !
+                bot.isDestroyed = true;
+                bot.mesh.getChildMeshes().forEach(m => m.dispose()); // Fait disparaître le modèle
+                if (bot.shadow) bot.shadow.dispose();
+                playerCar.boostEnergy = 100; // Refill complet
+                triggerTakedownMsg();
+                audio.playTakedownSound();
+            } else {
+                // Choc normal
+                const push = (5.5 - dist) / 5.5;
+                playerCar.mesh.position.x += (dx / dist) * push * 2.5;
+                playerCar.velocity = Math.max(playerCar.velocity * (1 - push * 0.3), 0);
+                audio.playCrashSound(0.2);
+            }
+        }
+    });
+
+    // Mise à jour de l'audio procédural
+    audio.updateEngine(playerCar.velocity, playerCar.boostActive, playerCar.shockwaveActive);
+
+    // --- CAMÉRA & LUMIERE ---
+    light.position.x = playerCar.mesh.position.x;
+    light.position.y = playerCar.mesh.position.y + 20;
+    light.position.z = playerCar.mesh.position.z;
+
+    // --- UI & HUD ---
+    updateMinimap(ctxMap, playerCar.mesh, bots);
+
     let currentPlace = 1;
-    bots.forEach(b => { if (b.mesh.position.z > car.position.z) currentPlace++; });
-    
+    bots.forEach(b => { if (b.mesh.position.z > playerCar.mesh.position.z) currentPlace++; });
+
     updateHUD(
-        Math.floor(Math.abs(carVelocity)), 
-        Math.max(0, Math.floor(car.position.z)), 
-        currentPlace, 
-        bots.length, 
-        boostEnergy, 
-        boostActive, 
-        isDrifting, 
+        Math.floor(Math.abs(playerCar.velocity)),
+        Math.max(0, Math.floor(playerCar.mesh.position.z)),
+        currentPlace,
+        bots.length,
+        playerCar.boostEnergy,
+        playerCar.boostActive,
+        playerCar.isDrifting,
         inputState.isDriftMode
     );
 
-    if (car.position.z >= FINISH_LINE_Z) {
+    // --- FINISH ---
+    if (playerCar.mesh.position.z >= FINISH_LINE_Z) {
         endGame(true, currentPlace);
+    }
+
+    // --- ANIMATION EAU (scroll de texture) ---
+    const eauTex = circuit.materials.eauMat.diffuseTexture;
+    if (eauTex) {
+        eauTex.uOffset += 0.00018;
+        eauTex.vOffset += 0.00012;
     }
 
     scene.render();
 });
 
-// ========== MINUTEUR ==========
-const timerInterval = setInterval(() => {
-    if (gameActive && isRacing) {
-        timeLeft--;
-        document.getElementById("timer").textContent = `TIME: ${timeLeft}`;
-        if (timeLeft <= 0) endGame();
-    }
-}, 1000);
-
 function endGame(finished, place = 1) {
     gameActive = false;
-    clearInterval(timerInterval);
-    showGameOver(finished, place, timeLeft, car.position.z);
+    showGameOver(finished, place, playerCar.mesh.position.z);
 }
 
-window.addEventListener("resize", () => {
-    engine.resize();
-});
+window.addEventListener("resize", () => { engine.resize(); });
+
+

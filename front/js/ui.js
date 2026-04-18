@@ -36,7 +36,7 @@ export function updateMinimap(ctxMap, car, bots) {
     // Joueur
     let plrX = ((car.position.x + 250) / 500) * 150;
     let plrY = 300 - (car.position.z / FINISH_LINE_Z) * 300;
-    ctxMap.fillStyle = "#00ffff"; 
+    ctxMap.fillStyle = "#00ffff";
     ctxMap.beginPath();
     ctxMap.arc(Math.floor(plrX), Math.floor(plrY), 6, 0, Math.PI * 2);
     ctxMap.fill();
@@ -47,27 +47,28 @@ export function updateMinimap(ctxMap, car, bots) {
 
 export function updateHUD(speed, distance, currentPlace, botsCount, boostEnergy, boostActive, isDrifting, isDriftMode) {
     document.getElementById("distance").textContent = `POS: ${currentPlace}/${botsCount + 1} | DIST: ${distance}M / ${FINISH_LINE_Z}M`;
-    
+
     // UI Boost
     document.getElementById("boostBar").style.width = `${boostEnergy}%`;
+
+    let driftText = "";
+    if (isDrifting) driftText = " <span style='font-size:14px; color:#ffaa00;'>DRIFTING</span>";
+    else if (isDriftMode) driftText = " <span style='font-size:14px; color:#ff5500;'>DRIFT MODE</span>";
+
+    const speedEl = document.getElementById("speedometer");
+    speedEl.innerHTML = `${speed}<span>KM/H</span>${driftText}`;
 
     if (boostActive) {
         document.getElementById("boostLabel").textContent = "BOOSTING 🔥";
         document.getElementById("boostLabel").classList.add("boostTextActive");
-        document.getElementById("speedometer").textContent = `SPEED: ${speed} KM/H`;
-        document.getElementById("speedometer").style.color = "#ff006e";
-        document.getElementById("speedometer").style.textShadow = "0 0 20px #ff006e";
+        speedEl.style.color = "#ff006e";
+        speedEl.style.textShadow = "0 0 25px rgba(255, 0, 110, 0.8)";
     } else {
-        let statusText = boostEnergy >= 100 ? "BOOST FULL (Appuie sur ESPACE)" : "BOOST (Maintiens ESPACE)";
+        let statusText = boostEnergy >= 100 ? "READY TO BOOST (SPACE)" : "NITRO RECHARGING";
         document.getElementById("boostLabel").textContent = statusText;
         document.getElementById("boostLabel").classList.remove("boostTextActive");
-
-        let driftText = "";
-        if (isDrifting) driftText = " (DRIFTING 💨)";
-        else if (isDriftMode) driftText = " [DRIFT MODE ON]";
-
-        document.getElementById("speedometer").textContent = `SPEED: ${speed} KM/H${driftText}`;
-        document.getElementById("speedometer").style.color = isDrifting ? "#ffaa00" : (isDriftMode ? "#ff5500" : "#00ffff");
+        speedEl.style.color = isDrifting ? "#ffaa00" : "#00ffff";
+        speedEl.style.textShadow = "0 0 20px rgba(0, 255, 255, 0.5)";
     }
 
     if (distance > FINISH_LINE_Z - 500 && distance < FINISH_LINE_Z) {
@@ -77,14 +78,13 @@ export function updateHUD(speed, distance, currentPlace, botsCount, boostEnergy,
     }
 }
 
-export function showGameOver(finished, place, timeLeft, distance) {
+export function showGameOver(finished, place, distance) {
     document.getElementById("gameOver").style.display = "block";
     const gameResultEl = document.getElementById("gameResult");
     const gameOverEl = document.getElementById("gameOver");
     const finalInfoEl = document.getElementById("finalInfo");
 
     if (finished) {
-        const timeTaken = 60 - timeLeft;
         if (place === 1) {
             gameResultEl.textContent = "YOU WIN! 🥇";
             gameResultEl.style.color = "#ffff00";
@@ -94,12 +94,13 @@ export function showGameOver(finished, place, timeLeft, distance) {
             gameResultEl.style.color = "#ffaa00";
             gameOverEl.style.borderColor = "#ffaa00";
         }
-        finalInfoEl.textContent = `TIME: ${timeTaken}s`;
+        finalInfoEl.textContent = `VITESSE ET STYLE AU TOP !`;
     } else {
-        gameResultEl.textContent = "TIME'S UP! ⏰";
+        // En mode sans timer, ceci ne devrait plus arriver via le temps
+        gameResultEl.textContent = "GAME OVER!";
         gameResultEl.style.color = "#ff0000";
         gameOverEl.style.borderColor = "#ff0000";
-        finalInfoEl.textContent = `DISTANCE REACHED: ${Math.floor(distance)}M`;
+        finalInfoEl.textContent = `DISTANCE PARCOURUE : ${Math.floor(distance)}M`;
     }
 }
 
@@ -110,17 +111,50 @@ export function startCountdown(onComplete) {
         countdownValue--;
         if (countdownValue > 0) {
             countdownEl.textContent = countdownValue;
-            countdownEl.style.transform = "translate(-50%, -50%) scale(1.3)";
-            setTimeout(() => countdownEl.style.transform = "translate(-50%, -50%) scale(1)", 150);
+            countdownEl.style.transform = "translate(-50%, -50%) scale(1.8)";
+            countdownEl.style.opacity = "1";
+            setTimeout(() => {
+                countdownEl.style.transform = "translate(-50%, -50%) scale(1)";
+            }, 200);
         } else if (countdownValue === 0) {
             countdownEl.textContent = "GO!";
-            countdownEl.style.color = "#00ff00";
-            countdownEl.style.textShadow = "0 0 50px #00ff00, 0 0 10px #ffffff";
-            countdownEl.style.transform = "translate(-50%, -50%) scale(1.5)";
+            countdownEl.style.color = "#00ff88";
+            countdownEl.style.textShadow = "0 0 60px #00ff88, 0 0 20px #ffffff";
+            countdownEl.style.transform = "translate(-50%, -50%) scale(2)";
             onComplete();
         } else {
             countdownEl.style.opacity = "0";
+            countdownEl.style.transform = "translate(-50%, -50%) scale(5)";
             clearInterval(countdownInterval);
         }
     }, 1000);
+}
+
+export function takePhoto(engine, camera) {
+    BABYLON.Tools.CreateScreenshotAsync(engine, camera, { width: 1920, height: 1080 }).then((screenshot) => {
+        const apiUrl = window.location.port === '5500' ? 'http://localhost:3000/api/save-photo' : '/api/save-photo';
+
+        // Send to server
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ data: screenshot }),
+        })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Photo saved:', data);
+            })
+
+            .catch(error => {
+                console.error('Error saving photo:', error);
+                if (window.location.port === '5500') {
+                    console.warn("ASTUCE : Live Server (5500) ne peut pas enregistrer de fichiers. Utilisez http://localhost:3000 pour que l'API fonctionne.");
+                }
+            });
+    });
 }
